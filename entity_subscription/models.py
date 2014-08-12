@@ -23,26 +23,10 @@ class Medium(models.Model):
         return self.display_name
 
 
-class Source(models.Model):
-    """A category of where notifications originate from.
-
-    Sources should make sense as a category of notifications to users,
-    and pieces of the application which create that type of
-    notification should own a `source` object which they can pass
-    along to the business logic for distributing the notificaiton.
-    """
-    name = models.CharField(max_length=64, unique=True)
-    display_name = models.CharField(max_length=64)
-    description = models.TextField()
-
-    def __unicode__(self):
-        return self.display_name
-
-
 class Action(models.Model):
     """A category of where notifications originate from.
 
-    Sources should make sense as a category of notifications to users,
+    Actions should make sense as a category of notifications to users,
     and pieces of the application which create that type of
     notification should own an `action` object which they can pass
     along to the business logic for distributing the notificaiton.

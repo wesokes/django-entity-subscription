@@ -1,13 +1,13 @@
 from django.contrib import admin
 
-from entity_subscription.models import Medium, Source, Subscription, Unsubscribe
+from entity_subscription.models import Medium, Action, Subscription, Unsubscribe
 
 
 class MediumAdmin(admin.ModelAdmin):
     pass
 
 
-class SourceAdmin(admin.ModelAdmin):
+class ActionAdmin(admin.ModelAdmin):
     pass
 
 
@@ -20,6 +20,6 @@ class UnsubscribeAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Medium, MediumAdmin)
-admin.site.register(Source, SourceAdmin)
+admin.site.register(Action, ActionAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)
 admin.site.register(Unsubscribe, UnsubscribeAdmin)

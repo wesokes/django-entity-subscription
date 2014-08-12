@@ -4,8 +4,7 @@ from django.test import TestCase
 from django_dynamic_fixture import G, N
 from entity.models import Entity, EntityRelationship
 from mock import patch
-from datetime import datetime, timedelta
-from freezegun import freeze_time
+from datetime import datetime
 
 from entity_subscription.models import (
     Medium, Action, Subscription, Unsubscribe, Notification, NotificationMedium)

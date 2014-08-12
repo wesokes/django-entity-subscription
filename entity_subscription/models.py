@@ -344,8 +344,7 @@ class NotificationManager(models.Manager):
         return self.get_queryset().mark_seen(*args, **kwargs)
 
     def create_notification(
-            self, entity, notification_action, context,
-            mediums=None, expires=None, subentity_type=None, event_id=None):
+            self, action, actor, action_object=None, target=None, context=None, expires=None, event_id=None):
         """Create notifications, if the appropriate subscription exits.
 
         This method also creates the appropriate NotificationMedium
@@ -393,45 +392,29 @@ class NotificationManager(models.Manager):
           IntegrityError - raised if the provided event_id already exists
           in a Notification.
         """
-        # First we check if there are any mediums subscribed. If not,
-        # we simply return.
-        mediums_subscribed = Subscription.objects.mediums_subscribed(
-            action=notification_action,
-            entity=entity,
-            subentity_type=subentity_type
-        )
-        if mediums is None:
-            mediums = mediums_subscribed
-        else:
-            mediums = mediums_subscribed.filter(id__in=(m.id for m in mediums))
-        if not mediums.exists():
-            return None
-
-        # Then, if there is at least one medium, we create the base
-        # notification object.
         current_time = datetime.datetime.utcnow()
         if isinstance(expires, timedelta):
             expires = current_time + expires
         if not event_id:
             event_id = '{action}-{timestamp}'.format(
-                action=notification_action.name,
+                action=action.name,
                 timestamp=current_time.strftime('%Y.%d.%m.%H.%M.%S.%f')
             )
         notification = self.create(
-            entity=entity,
-            subentity_type=subentity_type,
-            action=notification_action,
+            actor=actor,
+            action=action,
+            action_object=action_object,
+            target=target,
             context=context,
-            time_sent=current_time,
             time_expires=expires,
             event_id=event_id,
         )
 
         # Then we create all the related medium objects.
-        NotificationMedium.objects.bulk_create(
-            NotificationMedium(notification=notification, medium=medium)
-            for medium in mediums
-        )
+        # NotificationMedium.objects.bulk_create(
+        #     NotificationMedium(notification=notification, medium=medium)
+        #     for medium in mediums
+        # )
         return notification
 
 
@@ -447,6 +430,9 @@ class Notification(models.Model):
     event_id = models.CharField(max_length=128)
 
     objects = NotificationManager()
+
+    class Meta:
+        unique_together = ('actor', 'event_id',)
 
 
 class NotificationMedium(models.Model):

@@ -485,112 +485,43 @@ class NotificationManagerMarkSeen(TestCase):
 
 class NotificationManagerCreateNotificationTest(TestCase):
     def setUp(self):
-        self.ct = G(ContentType)
-        self.entity = G(Entity)
-        self.sub_e = G(Entity, entity_type=self.ct)
-        self.action = G(Action)
-        self.medium_1 = G(Medium)
-        self.medium_2 = G(Medium)
+        self.actor = G(Entity)
+        self.action = G(Action, name='test_action')
+        self.action_object = G(Entity)
+        self.target = G(Entity)
 
     def test_creates_notification(self):
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=None)
         Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
+            action=self.action,
+            actor=self.actor,
             context={},
         )
         self.assertEqual(Notification.objects.count(), 1)
 
-    @freeze_time("2013-01-22 00:00:00")
-    def test_expiration_datetime(self):
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=None)
-        note = Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
-            context={},
-            expires=timedelta(hours=1)
-        )
-        self.assertEqual(note.time_expires, datetime(2013, 1, 22, 1))
-
-    @freeze_time("2013-01-22 00:00:00")
-    def test_expiration_timedelta(self):
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=None)
-        note = Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
-            context={},
-            expires=datetime(2013, 1, 22, 12)
-        )
-        self.assertEqual(note.time_expires, datetime(2013, 1, 22, 12))
-
-    def test_not_subscribed(self):
-        Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
-            context={},
-        )
-        self.assertFalse(Notification.objects.exists())
-
-    def test_mediums_created(self):
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=None)
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_2, subentity_type=None)
-        Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
-            context={},
-        )
-        self.assertEqual(NotificationMedium.objects.count(), 2)
-
-    def test_mediums_list_restricts_mediums_created(self):
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=None)
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_2, subentity_type=None)
-        Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
-            context={},
-            mediums=[self.medium_1],
-        )
-        self.assertEqual(NotificationMedium.objects.count(), 1)
-        self.assertEqual(NotificationMedium.objects.first().medium, self.medium_1)
-
-    def test_subentity_type_group_notification(self):
-        G(EntityRelationship, super_entity=self.entity, sub_entity=self.sub_e)
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=self.ct)
-        note = Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
-            context={},
-            subentity_type=self.ct,
-        )
-        self.assertEqual(note.subentity_type, self.ct)
-        self.assertTrue(NotificationMedium.objects.exists())
-
     def test_creates_unique_event_ids(self):
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=None)
         notification_1 = Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
+            action=self.action,
+            actor=self.actor,
             context={},
         )
         notification_2 = Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
+            action=self.action,
+            actor=self.actor,
             context={},
         )
         self.assertNotEqual(notification_1.event_id, notification_2.event_id)
 
     def test_raises_bad_data_error(self):
-        G(Subscription, entity=self.entity, action=self.action, medium=self.medium_1, subentity_type=None)
         Notification.objects.create_notification(
-            entity=self.entity,
-            notification_action=self.action,
+            action=self.action,
+            actor=self.actor,
             context={},
             event_id='Not Going To Be Unique',
         )
         with self.assertRaises(IntegrityError):
             Notification.objects.create_notification(
-                entity=self.entity,
-                notification_action=self.action,
+                action=self.action,
+                actor=self.actor,
                 context={},
                 event_id='Not Going To Be Unique',
             )

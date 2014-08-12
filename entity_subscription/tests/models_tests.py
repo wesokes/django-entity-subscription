@@ -117,7 +117,7 @@ class SubscriptionManagerMediumsSubscribedGroup(TestCase):
         self.assertEqual(mediums.count(), 1)
         self.assertEqual(mediums.first(), self.medium_1)
 
-    def test_multiple_subscriptions_match_acorss_supers(self):
+    def test_multiple_subscriptions_match_across_supers(self):
         super_1 = G(Entity)
         super_2 = G(Entity)
         super_3 = G(Entity)

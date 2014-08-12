@@ -1,10 +1,13 @@
 from django.contrib.contenttypes.models import ContentType
+from django.db import IntegrityError
 from django.test import TestCase
 from django_dynamic_fixture import G, N
 from entity.models import Entity, EntityRelationship
 from mock import patch
+from datetime import datetime, timedelta
+from freezegun import freeze_time
 
-from entity_subscription.models import Medium, Source, Subscription, Unsubscribe
+from entity_subscription.models import Medium, Source, Subscription, Unsubscribe, Notification, NotificationMedium
 
 
 class SubscriptionManagerMediumsSubscribedTest(TestCase):
@@ -406,3 +409,187 @@ class UnicodeMethodTests(TestCase):
     def test_source_unicode(self):
         expected_unicode = 'Test'
         self.assertEqual(self.source.__unicode__(), expected_unicode)
+
+
+class NotificationQuerySetMediumTest(TestCase):
+    def setUp(self):
+        self.medium_1 = G(Medium)
+        self.medium_2 = G(Medium)
+        self.note_1 = G(Notification, context={})
+        self.note_2 = G(Notification, context={})
+
+    def test_basic_medium_filtering(self):
+        G(NotificationMedium, notification=self.note_1, medium=self.medium_1)
+        G(NotificationMedium, notification=self.note_2, medium=self.medium_2)
+        medium_1_notifications = Notification.objects.all().medium(medium=self.medium_1)
+        self.assertEqual(medium_1_notifications.count(), 1)
+        self.assertEqual(medium_1_notifications.first(), self.note_1)
+
+    def test_time_seen_filtering(self):
+        G(NotificationMedium, notification=self.note_1, medium=self.medium_1)
+        G(NotificationMedium, notification=self.note_2, medium=self.medium_1, time_seen=datetime(2013, 1, 1))
+        medium_1_notifications = Notification.objects.all().medium(medium=self.medium_1, include_seen=False)
+        self.assertEqual(medium_1_notifications.count(), 1)
+        self.assertEqual(medium_1_notifications.first(), self.note_1)
+
+
+class NotificationQuerySetMarkSeenTest(TestCase):
+    def setUp(self):
+        self.medium_1 = G(Medium)
+        self.medium_2 = G(Medium)
+        self.note_1 = G(Notification, context={})
+        self.note_2 = G(Notification, context={})
+
+    def test_marks_seen(self):
+        G(NotificationMedium, medium=self.medium_1, notification=self.note_1)
+        Notification.objects.all().mark_seen(for_medium=self.medium_1)
+        self.assertTrue(NotificationMedium.objects.first().time_seen is not None)
+
+    def test_does_not_mark_previously_seen(self):
+        seen_time = datetime(2013, 01, 01)
+        G(
+            NotificationMedium, medium=self.medium_1,
+            notification=self.note_1, time_seen=seen_time
+        )
+        marked_count = Notification.objects.all().mark_seen(for_medium=self.medium_1)
+        self.assertEqual(marked_count, 0)
+        self.assertEqual(NotificationMedium.objects.first().time_seen, seen_time)
+
+    def test_filters_by_medium(self):
+        G(NotificationMedium, medium=self.medium_1, notification=self.note_1)
+        G(NotificationMedium, medium=self.medium_2, notification=self.note_1)
+        marked_count = Notification.objects.all().mark_seen(for_medium=self.medium_1)
+        self.assertEqual(marked_count, 1)
+
+    def test_marks_for_multiple_notifications(self):
+        G(NotificationMedium, medium=self.medium_1, notification=self.note_1)
+        G(NotificationMedium, medium=self.medium_1, notification=self.note_2)
+        marked_count = Notification.objects.all().mark_seen(for_medium=self.medium_1)
+        self.assertEqual(marked_count, 2)
+
+
+class NotificationManagerMediumTest(TestCase):
+    @patch('entity_subscription.models.NotificationQuerySet.medium')
+    def test_calls_queryset_method(self, medium_mock):
+        Notification.objects.medium(medium=N(Medium))
+        self.assertTrue(len(medium_mock.mock_calls), 1)
+
+
+class NotificationManagerMarkSeen(TestCase):
+    @patch('entity_subscription.models.NotificationQuerySet.mark_seen')
+    def test_calls_queryset_method(self, mark_seen_mock):
+        Notification.objects.mark_seen(for_medium=N(Medium))
+        self.assertTrue(len(mark_seen_mock.mock_calls), 1)
+
+
+class NotificationManagerCreateNotificationTest(TestCase):
+    def setUp(self):
+        self.ct = G(ContentType)
+        self.entity = G(Entity)
+        self.sub_e = G(Entity, entity_type=self.ct)
+        self.source = G(Source)
+        self.medium_1 = G(Medium)
+        self.medium_2 = G(Medium)
+
+    def test_creates_notification(self):
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=None)
+        Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+        )
+        self.assertEqual(Notification.objects.count(), 1)
+
+    @freeze_time("2013-01-22 00:00:00")
+    def test_expiration_datetime(self):
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=None)
+        note = Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+            expires=timedelta(hours=1)
+        )
+        self.assertEqual(note.time_expires, datetime(2013, 1, 22, 1))
+
+    @freeze_time("2013-01-22 00:00:00")
+    def test_expiration_timedelta(self):
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=None)
+        note = Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+            expires=datetime(2013, 1, 22, 12)
+        )
+        self.assertEqual(note.time_expires, datetime(2013, 1, 22, 12))
+
+    def test_not_subscribed(self):
+        Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+        )
+        self.assertFalse(Notification.objects.exists())
+
+    def test_mediums_created(self):
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=None)
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_2, subentity_type=None)
+        Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+        )
+        self.assertEqual(NotificationMedium.objects.count(), 2)
+
+    def test_mediums_list_restricts_mediums_created(self):
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=None)
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_2, subentity_type=None)
+        Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+            mediums=[self.medium_1],
+        )
+        self.assertEqual(NotificationMedium.objects.count(), 1)
+        self.assertEqual(NotificationMedium.objects.first().medium, self.medium_1)
+
+    def test_subentity_type_group_notification(self):
+        G(EntityRelationship, super_entity=self.entity, sub_entity=self.sub_e)
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=self.ct)
+        note = Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+            subentity_type=self.ct,
+        )
+        self.assertEqual(note.subentity_type, self.ct)
+        self.assertTrue(NotificationMedium.objects.exists())
+
+    def test_creates_unique_uuids(self):
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=None)
+        notification_1 = Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+        )
+        notification_2 = Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+        )
+        self.assertNotEqual(notification_1.uuid, notification_2.uuid)
+
+    def test_raises_bad_data_error(self):
+        G(Subscription, entity=self.entity, source=self.source, medium=self.medium_1, subentity_type=None)
+        Notification.objects.create_notification(
+            entity=self.entity,
+            notification_source=self.source,
+            context={},
+            uuid='Not Going To Be Unique',
+        )
+        with self.assertRaises(IntegrityError):
+            Notification.objects.create_notification(
+                entity=self.entity,
+                notification_source=self.source,
+                context={},
+                uuid='Not Going To Be Unique',
+            )

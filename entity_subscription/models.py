@@ -2,6 +2,41 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models import Q
 from entity import Entity, EntityRelationship
+import jsonfield
+from datetime import timedelta
+import datetime
+
+
+class Medium(models.Model):
+    """A method of actually delivering the notification to users.
+
+    Mediums describe a particular method the application has of
+    sending notifications. The code that handles actually sending the
+    message should own a medium object that represents itself, or at
+    least, know the name of one.
+    """
+    name = models.CharField(max_length=64, unique=True)
+    display_name = models.CharField(max_length=64)
+    description = models.TextField()
+
+    def __unicode__(self):
+        return self.display_name
+
+
+class Source(models.Model):
+    """A category of where notifications originate from.
+
+    Sources should make sense as a category of notifications to users,
+    and pieces of the application which create that type of
+    notification should own a `source` object which they can pass
+    along to the business logic for distributing the notificaiton.
+    """
+    name = models.CharField(max_length=64, unique=True)
+    display_name = models.CharField(max_length=64)
+    description = models.TextField()
+
+    def __unicode__(self):
+        return self.display_name
 
 
 class SubscriptionManager(models.Manager):
@@ -244,33 +279,174 @@ class Unsubscribe(models.Model):
         return s.format(entity=entity, source=source, medium=medium)
 
 
-class Medium(models.Model):
-    """A method of actually delivering the notification to users.
+class NotificationQuerySet(models.query.QuerySet):
+    def medium(self, medium, include_seen=True):
+        """Return notifications for a given medium.
 
-    Mediums describe a particular method the application has of
-    sending notifications. The code that handles actually sending the
-    message should own a medium object that represents itself, or at
-    least, know the name of one.
-    """
-    name = models.CharField(max_length=64, unique=True)
-    display_name = models.CharField(max_length=64)
-    description = models.TextField()
+        Args:
 
-    def __unicode__(self):
-        return self.display_name
+          medium - A medium object to check for.
+
+          include_seen (Optional) - If `False`, exclude all
+          notification that have already been marked as seen.
+
+        Returns:
+
+          A QuerySet that filters out all notifications that are not
+          for the given medium. Can additionally filter out
+          notifications that have already been seen.
+        """
+        if include_seen:
+            notifications_for_medium = NotificationMedium.objects.filter(
+                medium=medium,
+            ).values_list('notification')
+        else:
+            notifications_for_medium = NotificationMedium.objects.filter(
+                medium=medium,
+                time_seen__isnull=True,
+            ).values_list('notification')
+        return self.filter(id__in=notifications_for_medium)
+
+    def mark_seen(self, for_medium):
+        """Set `time_seen` on the selected notifications for the medium.
+
+        If there are any notifications that already have a `time_seen`
+        their values will not be updated.
+
+        Args:
+
+          for_medium - A medium object to update `time_seen` objects
+          for.
+
+        Returns:
+
+           The number of objects that are marked as seen.
+
+        """
+        time = datetime.datetime.utcnow()
+        updated = NotificationMedium.objects.filter(
+            notification__in=self,
+            medium=for_medium,
+            time_seen__isnull=True,
+        ).update(time_seen=time)
+        return updated
 
 
-class Source(models.Model):
-    """A category of where notifications originate from.
+class NotificationManager(models.Manager):
+    def get_queryset(self):
+        return NotificationQuerySet(self.model)
 
-    Sources should make sense as a category of notifications to users,
-    and pieces of the application which create that type of
-    notification should own a `source` object which they can pass
-    along to the business logic for distributing the notificaiton.
-    """
-    name = models.CharField(max_length=64, unique=True)
-    display_name = models.CharField(max_length=64)
-    description = models.TextField()
+    def medium(self, *args, **kwargs):
+        return self.get_queryset().medium(*args, **kwargs)
 
-    def __unicode__(self):
-        return self.display_name
+    def mark_seen(self, *args, **kwargs):
+        return self.get_queryset().mark_seen(*args, **kwargs)
+
+    def create_notification(
+            self, entity, notification_source, context,
+            mediums=None, expires=None, subentity_type=None, uuid=None):
+        """Create notifications, if the appropriate subscription exits.
+
+        This method also creates the appropriate NotificationMedium
+        records, which identify how the notification is to be
+        delivered to the user. By default, NotificationMedium records
+        are created for each medium the entity is subscribed to.
+
+        Args:
+
+          entity - The entity to be notified.
+
+          notification_source - A source object for the notification.
+
+          context - A python dictionary of information describing the
+          notification. This is the context that will be used to
+          render the notification when it is delieverd to the user.
+
+          mediums (Optional) - If provided, restricts notifications to
+          be created for the mediums given. If there are no
+          subscriptions for those mediums, no notification will be created.
+
+          expires (Optional) - A datetime or timedelta that signifies
+          when the notification is no longer relevant. It is used to
+          set the `time_expires` field on the notification. If a
+          timedelta is given, the `time_expires` field will be set to
+          the current time plus the timedelta.
+
+          subentity_type (Optional) - A content type. If
+          subentity_type is not `None` it signifies that this is a
+          notification for a group. This field then describes the type
+          of sub-entity of the given entity that are in the group to
+          be notified.
+
+          uuid (Optional) - A string that uniquely identifies the
+          notification. If not given, one will be created. If the uuid
+          is not unique, an error will be raised.
+
+        Returns:
+
+          The notification object created. If no subscriptions exist
+          for the notification, returns None.
+
+        Raises:
+
+          IntegrityError - raised if the provided uuid already exists
+          in a Notification.
+        """
+        # First we check if there are any mediums subscribed. If not,
+        # we simply return.
+        mediums_subscribed = Subscription.objects.mediums_subscribed(
+            source=notification_source,
+            entity=entity,
+            subentity_type=subentity_type
+        )
+        if mediums is None:
+            mediums = mediums_subscribed
+        else:
+            mediums = mediums_subscribed.filter(id__in=(m.id for m in mediums))
+        if not mediums.exists():
+            return None
+
+        # Then, if there is at least one medium, we create the base
+        # notification object.
+        current_time = datetime.datetime.utcnow()
+        if isinstance(expires, timedelta):
+            expires = current_time + expires
+        if not uuid:
+            uuid = '{source}-{timestamp}'.format(
+                source=notification_source.name,
+                timestamp=current_time.strftime('%Y.%d.%m.%H.%M.%S.%f')
+            )
+        notification = self.create(
+            entity=entity,
+            subentity_type=subentity_type,
+            source=notification_source,
+            context=context,
+            time_sent=current_time,
+            time_expires=expires,
+            uuid=uuid,
+        )
+
+        # Then we create all the related medium objects.
+        NotificationMedium.objects.bulk_create(
+            NotificationMedium(notification=notification, medium=medium)
+            for medium in mediums
+        )
+        return notification
+
+
+class Notification(models.Model):
+    entity = models.ForeignKey(Entity)
+    subentity_type = models.ForeignKey(ContentType, null=True)
+    source = models.ForeignKey(Source)
+    context = jsonfield.JSONField()
+    time_sent = models.DateTimeField()
+    time_expires = models.DateTimeField(null=True, default=None)
+    uuid = models.CharField(max_length=128, unique=True)
+
+    objects = NotificationManager()
+
+
+class NotificationMedium(models.Model):
+    notification = models.ForeignKey('Notification')
+    medium = models.ForeignKey(Medium)
+    time_seen = models.DateTimeField(null=True, default=None)

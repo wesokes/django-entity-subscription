@@ -552,6 +552,13 @@ class NotificationQueryTest(TestCase):
         G(EntityRelationship, sub_entity=self.user_josh, super_entity=self.team_blue)
         G(EntityRelationship, sub_entity=self.user_jeff, super_entity=self.team_blue)
 
+        self.jared_woke_up = Notification.objects.create_notification(self.woke_up_action, self.user_jared)
+        self.jared_punched_josh = Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
+        self.jared_punched_jared = Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
+        self.jared_high_fived_jeff = Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+        self.josh_high_fived_wes = Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
+        self.wes_high_fived_jared = Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
+
     def test_individual_subscribe_entity_all_actions(self):
         G(
             Subscription,
@@ -559,15 +566,13 @@ class NotificationQueryTest(TestCase):
             medium=self.news_feed_medium, action=None,
         )
 
-        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
-        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
-        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
-        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
-
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(4, queryset.count())
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_woke_up, items[0])
+        self.assertEqual(self.jared_punched_josh, items[1])
+        self.assertEqual(self.jared_punched_jared, items[2])
+        self.assertEqual(self.jared_high_fived_jeff, items[3])
 
     def test_individual_subscribe_entity_specific_actions(self):
         G(
@@ -575,13 +580,6 @@ class NotificationQueryTest(TestCase):
             entity=self.user_wes, subentity_type=None, followed_entity=self.user_jared, followed_subentity_type=None,
             medium=self.news_feed_medium, action=self.punched_action,
         )
-
-        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
-        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
-        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
-        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
 
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(2, queryset.count())
@@ -592,13 +590,6 @@ class NotificationQueryTest(TestCase):
             entity=self.user_wes, subentity_type=None, followed_entity=None, followed_subentity_type=None,
             medium=self.news_feed_medium, action=self.high_fived_action,
         )
-
-        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
-        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
-        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
-        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
 
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(3, queryset.count())
@@ -611,13 +602,6 @@ class NotificationQueryTest(TestCase):
             medium=self.news_feed_medium, action=None,
         )
 
-        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
-        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
-        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
-        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
-
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(5, queryset.count())
 
@@ -629,15 +613,19 @@ class NotificationQueryTest(TestCase):
             medium=self.news_feed_medium, action=self.high_fived_action,
         )
 
-        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
-        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
-        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
-        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
-        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
-
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(2, queryset.count())
+
+    def test_individual_subscribe_different_medium(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None,
+            followed_entity=self.team_red, followed_subentity_type=self.user_content_type,
+            medium=self.news_feed_medium, action=self.high_fived_action,
+        )
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.email_medium)
+        self.assertEqual(0, queryset.count())
 
     def test_group_subscribe_entity_all_actions(self):
         pass

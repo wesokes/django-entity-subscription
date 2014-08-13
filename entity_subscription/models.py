@@ -347,13 +347,17 @@ class NotificationManager(models.Manager):
         return NotificationQuerySet(self.model)
 
     def get_for_entity(self, entity, medium):
-        subscribe_filter = Q(medium=medium) & Q(Q(entity=entity))
+        subscribe_filter = Q(medium=medium) & Q(entity=entity)
         subscribe_queryset = Subscription.objects.filter(subscribe_filter)
         filters = {
             'only_entity': Q(),
             'only_action': Q(),
             'entity_action': Q(),
         }
+
+        if subscribe_queryset.count() == 0:
+            return self.get_queryset().none()
+
         for subscription in subscribe_queryset:
             if subscription.followed_subentity_type:
                 # We assume there is a followed_entity if there is a followed_subentity_type

@@ -1204,10 +1204,137 @@ class NotificationUnsubscribeTest(NotificationQueryBaseTest):
         self.assertEqual(self.josh_high_fived_wes, items[3])
 
     def test_group_unsubscribe_entity(self):
-        pass
+        G(
+            Subscription,
+            entity=self.team_red, subentity_type=self.user_content_type,
+            followed_entity=self.user_jared, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+        G(
+            Subscription,
+            entity=self.team_red, subentity_type=self.user_content_type,
+            followed_entity=self.user_josh, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+        G(
+            Unsubscribe,
+            entity=self.user_wes, followed_entity=self.user_jared, medium=self.news_feed_medium,
+            action=None,
+        )
+        G(
+            Unsubscribe,
+            entity=self.user_jared, followed_entity=self.user_josh, medium=self.news_feed_medium,
+            action=None,
+        )
+
+
+        # check for jared
+        queryset = Notification.objects.get_for_entity(self.user_jared, self.news_feed_medium)
+        self.assertEqual(4, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_woke_up, items[0])
+        self.assertEqual(self.jared_punched_josh, items[1])
+        self.assertEqual(self.jared_punched_jared, items[2])
+        self.assertEqual(self.jared_high_fived_jeff, items[3])
+
+        # check for wes
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(1, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.josh_high_fived_wes, items[0])
 
     def test_group_unsubscribe_action(self):
-        pass
+        G(
+            Subscription,
+            entity=self.team_red, subentity_type=self.user_content_type,
+            followed_entity=self.user_jared, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+        G(
+            Subscription,
+            entity=self.team_red, subentity_type=self.user_content_type,
+            followed_entity=self.user_josh, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+        G(
+            Unsubscribe,
+            entity=self.user_wes, followed_entity=None, medium=self.news_feed_medium,
+            action=self.punched_action,
+        )
+        G(
+            Unsubscribe,
+            entity=self.user_jared, followed_entity=None, medium=self.news_feed_medium,
+            action=self.high_fived_action,
+        )
+
+
+        # check for jared
+        queryset = Notification.objects.get_for_entity(self.user_jared, self.news_feed_medium)
+        self.assertEqual(3, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_woke_up, items[0])
+        self.assertEqual(self.jared_punched_josh, items[1])
+        self.assertEqual(self.jared_punched_jared, items[2])
+
+        # check for wes
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(3, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_woke_up, items[0])
+        self.assertEqual(self.jared_high_fived_jeff, items[1])
+        self.assertEqual(self.josh_high_fived_wes, items[2])
 
     def test_group_unsubscribe_entity_action(self):
-        pass
+        G(
+            Subscription,
+            entity=self.team_red, subentity_type=self.user_content_type,
+            followed_entity=self.user_jared, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+        G(
+            Subscription,
+            entity=self.team_red, subentity_type=self.user_content_type,
+            followed_entity=self.user_josh, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+        G(
+            Unsubscribe,
+            entity=self.user_wes, followed_entity=self.user_jared, medium=self.news_feed_medium,
+            action=self.high_fived_action,
+        )
+        G(
+            Unsubscribe,
+            entity=self.user_jared, followed_entity=self.user_josh, medium=self.news_feed_medium,
+            action=self.high_fived_action,
+        )
+
+
+        # check for jared
+        queryset = Notification.objects.get_for_entity(self.user_jared, self.news_feed_medium)
+        self.assertEqual(4, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_woke_up, items[0])
+        self.assertEqual(self.jared_punched_josh, items[1])
+        self.assertEqual(self.jared_punched_jared, items[2])
+        self.assertEqual(self.jared_high_fived_jeff, items[3])
+
+        # check for wes
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(4, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_woke_up, items[0])
+        self.assertEqual(self.jared_punched_josh, items[1])
+        self.assertEqual(self.jared_punched_jared, items[2])
+        self.assertEqual(self.josh_high_fived_wes, items[3])

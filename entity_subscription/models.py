@@ -377,9 +377,28 @@ class NotificationManager(models.Manager):
                 else:
                     filters['only_action'].add(Q(action=subscription.action), Q.OR)
 
-        # TODO: unsubscribes
+        # Handle unsubscribes
+        unsubscribe_filter = Q(medium=medium) & Q(entity=entity)
+        unsubscribe_queryset = Unsubscribe.objects.filter(unsubscribe_filter)
+        excludes = {
+            'only_entity': Q(),
+            'only_action': Q(),
+            'entity_action': Q(),
+        }
 
-        return self.get_queryset().filter(filters['only_entity'] | filters['only_action'] | filters['entity_action'])
+        for unsubscribe in unsubscribe_queryset:
+            if unsubscribe.followed_entity and unsubscribe.action:
+                excludes['entity_action'].add(Q(actor=unsubscribe.followed_entity) & Q(action=unsubscribe.action), Q.OR)
+            elif unsubscribe.followed_entity:
+                excludes['only_entity'].add(Q(actor=unsubscribe.followed_entity), Q.OR)
+            else:
+                excludes['only_action'].add(Q(action=unsubscribe.action), Q.OR)
+
+        return self.get_queryset().filter(
+            filters['only_entity'] | filters['only_action'] | filters['entity_action']
+        ).exclude(
+            excludes['only_entity'] | excludes['only_action'] | excludes['entity_action']
+        )
 
     def medium(self, *args, **kwargs):
         return self.get_queryset().medium(*args, **kwargs)

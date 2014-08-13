@@ -568,6 +568,8 @@ class NotificationQueryTest(TestCase):
 
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(4, queryset.count())
+
+        # check notification objects
         items = list(queryset.order_by('time_created'))
         self.assertEqual(self.jared_woke_up, items[0])
         self.assertEqual(self.jared_punched_josh, items[1])
@@ -584,6 +586,11 @@ class NotificationQueryTest(TestCase):
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(2, queryset.count())
 
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_punched_josh, items[0])
+        self.assertEqual(self.jared_punched_jared, items[1])
+
     def test_individual_subscribe_only_actions(self):
         G(
             Subscription,
@@ -593,6 +600,12 @@ class NotificationQueryTest(TestCase):
 
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(3, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_high_fived_jeff, items[0])
+        self.assertEqual(self.josh_high_fived_wes, items[1])
+        self.assertEqual(self.wes_high_fived_jared, items[2])
 
     def test_individual_subscribe_subentity_all_actions(self):
         G(
@@ -605,6 +618,14 @@ class NotificationQueryTest(TestCase):
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(5, queryset.count())
 
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_woke_up, items[0])
+        self.assertEqual(self.jared_punched_josh, items[1])
+        self.assertEqual(self.jared_punched_jared, items[2])
+        self.assertEqual(self.jared_high_fived_jeff, items[3])
+        self.assertEqual(self.wes_high_fived_jared, items[4])
+
     def test_individual_subscribe_subentity_specific_actions(self):
         G(
             Subscription,
@@ -615,6 +636,11 @@ class NotificationQueryTest(TestCase):
 
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(2, queryset.count())
+
+        # check notification objects
+        items = list(queryset.order_by('time_created'))
+        self.assertEqual(self.jared_high_fived_jeff, items[0])
+        self.assertEqual(self.wes_high_fived_jared, items[1])
 
     def test_individual_subscribe_different_medium(self):
         G(

@@ -1124,3 +1124,24 @@ class NotificationGroupQueryMultipleSubTest(NotificationQueryBaseTest):
         self.assertEqual(self.jared_high_fived_jeff, items[0])
         self.assertEqual(self.wes_high_fived_jared, items[1])
         self.assertEqual(self.jeff_woke_up, items[2])
+
+
+class NotificationUnsubscribeTest(NotificationQueryBaseTest):
+
+    def test_individual_unsubscribe_entity(self):
+        pass
+
+    def test_individual_unsubscribe_action(self):
+        pass
+
+    def test_individual_unsubscribe_entity_action(self):
+        pass
+
+    def test_group_unsubscribe_entity(self):
+        pass
+
+    def test_group_unsubscribe_action(self):
+        pass
+
+    def test_group_unsubscribe_entity_action(self):
+        pass

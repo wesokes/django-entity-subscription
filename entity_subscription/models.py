@@ -346,18 +346,23 @@ class NotificationManager(models.Manager):
     def get_queryset(self):
         return NotificationQuerySet(self.model)
 
-    def get_for_entity(self, entity, medium):
+    def get_subscribe_queryset(self, entity, medium):
         entities_queryset = Entity.objects.filter(sub_relationships__sub_entity=entity)
         subscribe_filter = Q(medium=medium) & Q(Q(entity=entity) | Q(entity__in=entities_queryset))
         subscribe_queryset = Subscription.objects.filter(subscribe_filter)
+        return subscribe_queryset
+
+    def get_unsubscribe_queryset(self, entity, medium):
+        unsubscribe_filter = Q(medium=medium) & Q(entity=entity)
+        unsubscribe_queryset = Unsubscribe.objects.filter(unsubscribe_filter)
+        return unsubscribe_queryset
+
+    def get_filters(self, subscribe_queryset):
         filters = {
             'only_entity': Q(),
             'only_action': Q(),
             'entity_action': Q(),
         }
-
-        if subscribe_queryset.count() == 0:
-            return self.get_queryset().none()
 
         for subscription in subscribe_queryset:
             if subscription.followed_subentity_type:
@@ -371,15 +376,16 @@ class NotificationManager(models.Manager):
                     filters['only_entity'].add(Q(actor__in=entities_queryset), Q.OR)
             else:
                 if subscription.followed_entity and subscription.action:
-                    filters['entity_action'].add(Q(actor=subscription.followed_entity) & Q(action=subscription.action), Q.OR)
+                    filters['entity_action'].add(
+                        Q(actor=subscription.followed_entity) & Q(action=subscription.action), Q.OR)
                 elif subscription.followed_entity:
                     filters['only_entity'].add(Q(actor=subscription.followed_entity), Q.OR)
                 else:
                     filters['only_action'].add(Q(action=subscription.action), Q.OR)
 
-        # Handle unsubscribes
-        unsubscribe_filter = Q(medium=medium) & Q(entity=entity)
-        unsubscribe_queryset = Unsubscribe.objects.filter(unsubscribe_filter)
+        return filters
+
+    def get_excludes(self, unsubscribe_queryset):
         excludes = {
             'only_entity': Q(),
             'only_action': Q(),
@@ -394,11 +400,27 @@ class NotificationManager(models.Manager):
             else:
                 excludes['only_action'].add(Q(action=unsubscribe.action), Q.OR)
 
+        return excludes
+
+    def get_filtered_queryset(self, filters, excludes):
         return self.get_queryset().filter(
             filters['only_entity'] | filters['only_action'] | filters['entity_action']
         ).exclude(
             excludes['only_entity'] | excludes['only_action'] | excludes['entity_action']
         )
+
+    def get_for_entity(self, entity, medium):
+        subscribe_queryset = self.get_subscribe_queryset(entity, medium)
+
+        if subscribe_queryset.count() == 0:
+            return self.get_queryset().none()
+
+        filters = self.get_filters(subscribe_queryset)
+
+        unsubscribe_queryset = self.get_unsubscribe_queryset(entity, medium)
+        excludes = self.get_excludes(unsubscribe_queryset)
+
+        return self.get_filtered_queryset(filters, excludes)
 
     def medium(self, *args, **kwargs):
         return self.get_queryset().medium(*args, **kwargs)

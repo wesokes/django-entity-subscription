@@ -553,11 +553,16 @@ class NotificationQueryBaseTest(TestCase):
         G(EntityRelationship, sub_entity=self.user_jeff, super_entity=self.team_blue)
 
         self.jared_woke_up = Notification.objects.create_notification(self.woke_up_action, self.user_jared)
-        self.jared_punched_josh = Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
-        self.jared_punched_jared = Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
-        self.jared_high_fived_jeff = Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
-        self.josh_high_fived_wes = Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
-        self.wes_high_fived_jared = Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
+        self.jared_punched_josh = Notification.objects.create_notification(
+            self.punched_action, self.user_jared, action_object=self.user_josh)
+        self.jared_punched_jared = Notification.objects.create_notification(
+            self.punched_action, self.user_jared, action_object=self.user_jared)
+        self.jared_high_fived_jeff = Notification.objects.create_notification(
+            self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+        self.josh_high_fived_wes = Notification.objects.create_notification(
+            self.high_fived_action, self.user_josh, action_object=self.user_wes)
+        self.wes_high_fived_jared = Notification.objects.create_notification(
+            self.high_fived_action, self.user_wes, action_object=self.user_jared)
         self.jeff_woke_up = Notification.objects.create_notification(self.woke_up_action, self.user_jeff)
 
 
@@ -1227,7 +1232,6 @@ class NotificationUnsubscribeTest(NotificationQueryBaseTest):
             action=None,
         )
 
-
         # check for jared
         queryset = Notification.objects.get_for_entity(self.user_jared, self.news_feed_medium)
         self.assertEqual(4, queryset.count())
@@ -1270,7 +1274,6 @@ class NotificationUnsubscribeTest(NotificationQueryBaseTest):
             entity=self.user_jared, followed_entity=None, medium=self.news_feed_medium,
             action=self.high_fived_action,
         )
-
 
         # check for jared
         queryset = Notification.objects.get_for_entity(self.user_jared, self.news_feed_medium)
@@ -1315,7 +1318,6 @@ class NotificationUnsubscribeTest(NotificationQueryBaseTest):
             entity=self.user_jared, followed_entity=self.user_josh, medium=self.news_feed_medium,
             action=self.high_fived_action,
         )
-
 
         # check for jared
         queryset = Notification.objects.get_for_entity(self.user_jared, self.news_feed_medium)

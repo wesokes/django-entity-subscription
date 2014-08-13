@@ -347,7 +347,8 @@ class NotificationManager(models.Manager):
         return NotificationQuerySet(self.model)
 
     def get_for_entity(self, entity, medium):
-        subscribe_filter = Q(medium=medium) & Q(entity=entity)
+        entities_queryset = Entity.objects.filter(sub_relationships__sub_entity=entity)
+        subscribe_filter = Q(medium=medium) & Q(Q(entity=entity) | Q(entity__in=entities_queryset))
         subscribe_queryset = Subscription.objects.filter(subscribe_filter)
         filters = {
             'only_entity': Q(),

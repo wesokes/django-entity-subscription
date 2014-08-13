@@ -366,16 +366,16 @@ class NotificationManager(models.Manager):
                     entity_type=subscription.followed_subentity_type,
                     super_relationships__super_entity=subscription.followed_entity)
                 if subscription.action:
-                    filters['entity_action'].add(Q(actor__in=entities_queryset) & Q(action=subscription.action), Q.AND)
+                    filters['entity_action'].add(Q(actor__in=entities_queryset) & Q(action=subscription.action), Q.OR)
                 else:
-                    filters['only_entity'].add(Q(actor__in=entities_queryset), Q.AND)
+                    filters['only_entity'].add(Q(actor__in=entities_queryset), Q.OR)
             else:
                 if subscription.followed_entity and subscription.action:
-                    filters['entity_action'].add(Q(actor=subscription.followed_entity) & Q(action=subscription.action), Q.AND)
+                    filters['entity_action'].add(Q(actor=subscription.followed_entity) & Q(action=subscription.action), Q.OR)
                 elif subscription.followed_entity:
-                    filters['only_entity'].add(Q(actor=subscription.followed_entity), Q.AND)
+                    filters['only_entity'].add(Q(actor=subscription.followed_entity), Q.OR)
                 else:
-                    filters['only_action'].add(Q(action=subscription.action), Q.AND)
+                    filters['only_action'].add(Q(action=subscription.action), Q.OR)
 
         # TODO: unsubscribes
 

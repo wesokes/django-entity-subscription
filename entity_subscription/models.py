@@ -238,10 +238,15 @@ class Subscription(models.Model):
     action/medium combination, setting the `subentity_type` field to
     None will create an individual subscription.
     """
-    medium = models.ForeignKey('Medium')
-    action = models.ForeignKey('Action')
+    # The entity that is subscribed
     entity = models.ForeignKey(Entity)
     subentity_type = models.ForeignKey(ContentType, null=True)
+
+    # The entity/action/medium being subscribed to
+    medium = models.ForeignKey('Medium')
+    action = models.ForeignKey('Action', null=True)
+    followed_entity = models.ForeignKey(Entity, related_name='+', null=True)
+    followed_subentity_type = models.ForeignKey(ContentType, related_name='+', null=True)
 
     objects = SubscriptionManager()
 
@@ -266,9 +271,13 @@ class Unsubscribe(models.Model):
     Entities can opt-out individually from recieving any notification
     of a given action/medium combination.
     """
+    # entity that is unsubscribing
     entity = models.ForeignKey(Entity)
+
+    # items unsubscribing from
+    followed_entity = models.ForeignKey(Entity, related_name='+', null=True)
     medium = models.ForeignKey('Medium')
-    action = models.ForeignKey('Action')
+    action = models.ForeignKey('Action', null=True)
 
     objects = UnsubscribeManager()
 
@@ -336,6 +345,36 @@ class NotificationQuerySet(models.query.QuerySet):
 class NotificationManager(models.Manager):
     def get_queryset(self):
         return NotificationQuerySet(self.model)
+
+    def get_for_entity(self, entity, medium):
+        subscribe_filter = Q(medium=medium) & Q(Q(entity=entity))
+        subscribe_queryset = Subscription.objects.filter(subscribe_filter)
+        filters = {
+            'only_entity': Q(),
+            'only_action': Q(),
+            'entity_action': Q(),
+        }
+        for subscription in subscribe_queryset:
+            if subscription.followed_subentity_type:
+                # We assume there is a followed_entity if there is a followed_subentity_type
+                entities_queryset = Entity.objects.filter(
+                    entity_type=subscription.followed_subentity_type,
+                    super_relationships__super_entity=subscription.followed_entity)
+                if subscription.action:
+                    filters['entity_action'].add(Q(actor__in=entities_queryset) & Q(action=subscription.action), Q.AND)
+                else:
+                    filters['only_entity'].add(Q(actor__in=entities_queryset), Q.AND)
+            else:
+                if subscription.followed_entity and subscription.action:
+                    filters['entity_action'].add(Q(actor=subscription.followed_entity) & Q(action=subscription.action), Q.AND)
+                elif subscription.followed_entity:
+                    filters['only_entity'].add(Q(actor=subscription.followed_entity), Q.AND)
+                else:
+                    filters['only_action'].add(Q(action=subscription.action), Q.AND)
+
+        # TODO: unsubscribes
+
+        return self.get_queryset().filter(filters['only_entity'] | filters['only_action'] | filters['entity_action'])
 
     def medium(self, *args, **kwargs):
         return self.get_queryset().medium(*args, **kwargs)

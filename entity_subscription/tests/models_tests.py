@@ -524,3 +524,132 @@ class NotificationManagerCreateNotificationTest(TestCase):
                 context={},
                 event_id='Not Going To Be Unique',
             )
+
+
+class NotificationQueryTest(TestCase):
+    def setUp(self):
+        super(NotificationQueryTest, self).setUp()
+        self.team_content_type = G(ContentType)
+        self.user_content_type = G(ContentType)
+
+        self.news_feed_medium = G(Medium, name='news_feed', display_name='News Feed')
+        self.email_medium = G(Medium, name='email', display_name='Email')
+
+        self.woke_up_action = G(Action, name='action1', display_name='woke up')
+        self.punched_action = G(Action, name='action2', display_name='punched')
+        self.high_fived_action = G(Action, name='action3', display_name='high fived')
+
+        self.team_red = G(Entity, entity_type=self.team_content_type)
+        self.team_blue = G(Entity, entity_type=self.team_content_type)
+
+        self.user_wes = G(Entity, entity_type=self.user_content_type)
+        self.user_jared = G(Entity, entity_type=self.user_content_type)
+        self.user_josh = G(Entity, entity_type=self.user_content_type)
+        self.user_jeff = G(Entity, entity_type=self.user_content_type)
+
+        G(EntityRelationship, sub_entity=self.user_wes, super_entity=self.team_red)
+        G(EntityRelationship, sub_entity=self.user_jared, super_entity=self.team_red)
+        G(EntityRelationship, sub_entity=self.user_josh, super_entity=self.team_blue)
+        G(EntityRelationship, sub_entity=self.user_jeff, super_entity=self.team_blue)
+
+    def test_individual_subscribe_entity_all_actions(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None, followed_entity=self.user_jared, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+
+        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
+        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
+        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(4, queryset.count())
+
+    def test_individual_subscribe_entity_specific_actions(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None, followed_entity=self.user_jared, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=self.punched_action,
+        )
+
+        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
+        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
+        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(2, queryset.count())
+
+    def test_individual_subscribe_only_actions(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None, followed_entity=None, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=self.high_fived_action,
+        )
+
+        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
+        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
+        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(3, queryset.count())
+
+    def test_individual_subscribe_subentity_all_actions(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None,
+            followed_entity=self.team_red, followed_subentity_type=self.user_content_type,
+            medium=self.news_feed_medium, action=None,
+        )
+
+        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
+        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
+        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(5, queryset.count())
+
+    def test_individual_subscribe_subentity_specific_actions(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None,
+            followed_entity=self.team_red, followed_subentity_type=self.user_content_type,
+            medium=self.news_feed_medium, action=self.high_fived_action,
+        )
+
+        Notification.objects.create_notification(self.woke_up_action, self.user_jared)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_josh)
+        Notification.objects.create_notification(self.punched_action, self.user_jared, action_object=self.user_jared)
+        Notification.objects.create_notification(self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+        Notification.objects.create_notification(self.high_fived_action, self.user_josh, action_object=self.user_wes)
+        Notification.objects.create_notification(self.high_fived_action, self.user_wes, action_object=self.user_jared)
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        self.assertEqual(2, queryset.count())
+
+    def test_group_subscribe_entity_all_actions(self):
+        pass
+
+    def test_group_subscribe_entity_specific_actions(self):
+        pass
+
+    def test_group_subscribe_only_actions(self):
+        pass
+
+    def test_group_subscribe_subentity_all_actions(self):
+        pass
+
+    def test_group_subscribe_subentity_specific_actions(self):
+        pass

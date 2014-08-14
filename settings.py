@@ -50,7 +50,7 @@ def configure_settings():
                 'entity_subscription.tests',
                 'django_nose',
             ),
-            ROOT_URLCONF='entity_subscription.urls',
+            ROOT_URLCONF='entity_subscription.tests.urls',
             DEBUG=False,
-            TEST_RUNNER='django_nose.NoseTestSuiteRunner',
+            TEST_RUNNER='django_nose.NoseTestSuiteRunner'
         )

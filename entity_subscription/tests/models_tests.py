@@ -1,4 +1,5 @@
 from django.contrib.contenttypes.models import ContentType
+from django.core.urlresolvers import reverse
 from django.db import IntegrityError
 from django.test import TestCase
 from django_dynamic_fixture import G, N
@@ -540,12 +541,17 @@ class NotificationQueryBaseTest(TestCase):
         self.team_content_type = ContentType.objects.get_for_model(Team)
         self.user_content_type = ContentType.objects.get_for_model(User)
 
-        self.news_feed_medium = G(Medium, name='news_feed', display_name='News Feed')
+        self.news_feed_medium = G(
+            Medium,
+            name='news_feed',
+            display_name='News Feed',
+            render_class_path='entity_subscription.base.BaseMedium',
+        )
         self.email_medium = G(Medium, name='email', display_name='Email')
 
-        self.woke_up_action = G(Action, name='action1', display_name='woke up')
-        self.punched_action = G(Action, name='action2', display_name='punched')
-        self.high_fived_action = G(Action, name='action3', display_name='high fived')
+        self.woke_up_action = G(Action, name='action1', display_name='woke up', render_class_path=None)
+        self.punched_action = G(Action, name='action2', display_name='punched', render_class_path=None)
+        self.high_fived_action = G(Action, name='action3', display_name='high fived', render_class_path=None)
 
         self.team_red = G(Entity, entity_type=self.team_content_type, entity_id=team_red.id)
         self.team_blue = G(Entity, entity_type=self.team_content_type, entity_id=team_blue.id)
@@ -560,18 +566,77 @@ class NotificationQueryBaseTest(TestCase):
         G(EntityRelationship, sub_entity=self.user_josh, super_entity=self.team_blue)
         G(EntityRelationship, sub_entity=self.user_jeff, super_entity=self.team_blue)
 
-        self.jared_woke_up = Notification.objects.create_notification(self.woke_up_action, self.user_jared)
+        self.jared_woke_up = Notification.objects.create_notification(
+            self.woke_up_action,
+            self.user_jared,
+            context={
+                'actor_url_name': 'user_page',
+                'actor_id': user_jared.id,
+            },
+        )
         self.jared_punched_josh = Notification.objects.create_notification(
-            self.punched_action, self.user_jared, action_object=self.user_josh)
+            self.punched_action,
+            self.user_jared,
+            action_object=self.user_josh,
+            context={
+                'actor_url_name': 'user_page',
+                'actor_id': user_jared.id,
+                'action_object_url_name': 'user_page',
+                'action_object_id': user_josh.id,
+            },
+        )
         self.jared_punched_jared = Notification.objects.create_notification(
-            self.punched_action, self.user_jared, action_object=self.user_jared)
+            self.punched_action,
+            self.user_jared,
+            action_object=self.user_jared,
+            context={
+                'actor_url_name': 'user_page',
+                'actor_id': user_jared.id,
+                'action_object_url_name': 'user_page',
+                'action_object_id': user_jared.id,
+            },
+        )
         self.jared_high_fived_jeff = Notification.objects.create_notification(
-            self.high_fived_action, self.user_jared, action_object=self.user_jeff)
+            self.high_fived_action,
+            self.user_jared,
+            action_object=self.user_jeff,
+            context={
+                'actor_url_name': 'user_page',
+                'actor_id': user_jared.id,
+                'action_object_url_name': 'user_page',
+                'action_object_id': user_jeff.id,
+            },
+        )
         self.josh_high_fived_wes = Notification.objects.create_notification(
-            self.high_fived_action, self.user_josh, action_object=self.user_wes)
+            self.high_fived_action,
+            self.user_josh,
+            action_object=self.user_wes,
+            context={
+                'actor_url_name': 'user_page',
+                'actor_id': user_josh.id,
+                'action_object_url_name': 'user_page',
+                'action_object_id': user_wes.id,
+            },
+        )
         self.wes_high_fived_jared = Notification.objects.create_notification(
-            self.high_fived_action, self.user_wes, action_object=self.user_jared)
-        self.jeff_woke_up = Notification.objects.create_notification(self.woke_up_action, self.user_jeff)
+            self.high_fived_action,
+            self.user_wes,
+            action_object=self.user_jared,
+            context={
+                'actor_url_name': 'user_page',
+                'actor_id': user_wes.id,
+                'action_object_url_name': 'user_page',
+                'action_object_id': user_jared.id,
+            },
+        )
+        self.jeff_woke_up = Notification.objects.create_notification(
+            self.woke_up_action,
+            self.user_jeff,
+            context={
+                'actor_url_name': 'user_page',
+                'actor_id': user_jeff.id,
+            },
+        )
 
 
 class NotificationIndividualQueryTest(NotificationQueryBaseTest):
@@ -1358,7 +1423,7 @@ class ActionTest(NotificationQueryBaseTest):
             name='action_1',
             display_name='posted',
             description='Posted an item',
-            render_class_path='entity_subscription.tests.actions.PostAction',
+            render_class_path='entity_subscription.base.BaseAction',
         )
 
     def test_default_rendering_actor_action(self):
@@ -1417,3 +1482,49 @@ class ActionTest(NotificationQueryBaseTest):
              '<a href="target url">A Board</a>'),
             notification.render()
         )
+
+
+class MediumTest(NotificationQueryBaseTest):
+
+    def setUp(self):
+        super(MediumTest, self).setUp()
+
+    def test_render_plain(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None,
+            followed_entity=self.user_jared, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        notifications = list(queryset.order_by('time_created'))
+        rendered_notifications = self.news_feed_medium.render(notifications, html=False)
+
+        expected_rendered_data = [
+            'jared woke up',
+            'jared punched josh',
+            'jared punched jared',
+            'jared high fived jeff',
+        ]
+        self.assertEqual(expected_rendered_data, rendered_notifications)
+
+    def test_render_html(self):
+        G(
+            Subscription,
+            entity=self.user_wes, subentity_type=None,
+            followed_entity=self.user_jared, followed_subentity_type=None,
+            medium=self.news_feed_medium, action=None,
+        )
+
+        queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
+        notifications = list(queryset.order_by('time_created'))
+        rendered_notifications = self.news_feed_medium.render(notifications)
+
+        expected_rendered_data = [
+            '<a href="/user/2/">jared</a> woke up',
+            '<a href="/user/2/">jared</a> punched <a href="/user/3/">josh</a>',
+            '<a href="/user/2/">jared</a> punched <a href="/user/2/">jared</a>',
+            '<a href="/user/2/">jared</a> high fived <a href="/user/4/">jeff</a>',
+        ]
+        self.assertEqual(expected_rendered_data, rendered_notifications)

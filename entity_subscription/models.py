@@ -1,11 +1,11 @@
+import datetime
+
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models import Q
 from django.utils.module_loading import import_by_path
 from entity import Entity, EntityRelationship
 import jsonfield
-from datetime import timedelta
-import datetime
 
 
 class Medium(models.Model):
@@ -19,6 +19,18 @@ class Medium(models.Model):
     name = models.CharField(max_length=64, unique=True)
     display_name = models.CharField(max_length=64)
     description = models.TextField()
+    render_class_path = models.CharField(max_length=128, null=True)
+
+    @property
+    def default_render_class_path(self):
+        return 'entity_subscription.base.BaseMedium'
+
+    def get_render_class_path(self):
+        return self.render_class_path if self.render_class_path else self.default_render_class_path
+
+    def render(self, notifications, html=True):
+        medium_class = import_by_path(self.get_render_class_path())(self)
+        return medium_class.render(notifications, html=html)
 
     def __unicode__(self):
         return self.display_name
@@ -35,7 +47,14 @@ class Action(models.Model):
     name = models.CharField(max_length=64, unique=True)
     display_name = models.CharField(max_length=64)
     description = models.TextField()
-    render_class_path = models.CharField(max_length=128)
+    render_class_path = models.CharField(max_length=128, null=True)
+
+    @property
+    def default_render_class_path(self):
+        return 'entity_subscription.base.BaseAction'
+
+    def get_render_class_path(self):
+        return self.render_class_path if self.render_class_path else self.default_render_class_path
 
     def __unicode__(self):
         return self.display_name
@@ -479,7 +498,7 @@ class NotificationManager(models.Manager):
           in a Notification.
         """
         current_time = datetime.datetime.utcnow()
-        if isinstance(expires, timedelta):
+        if isinstance(expires, datetime.timedelta):
             expires = current_time + expires
         if not event_id:
             event_id = '{action}-{timestamp}'.format(
@@ -521,7 +540,7 @@ class Notification(models.Model):
         unique_together = ('actor', 'event_id',)
 
     def render(self, html=True):
-        action_class = import_by_path(self.action.render_class_path)(self)
+        action_class = import_by_path(self.action.get_render_class_path())(self)
         return action_class.render(html=html)
 
 

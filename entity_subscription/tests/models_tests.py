@@ -8,6 +8,7 @@ from datetime import datetime
 
 from entity_subscription.models import (
     Medium, Action, Subscription, Unsubscribe, Notification, NotificationMedium)
+from entity_subscription.tests.models import User, Team, Message, Board
 
 
 class SubscriptionManagerMediumsSubscribedTest(TestCase):
@@ -529,8 +530,15 @@ class NotificationManagerCreateNotificationTest(TestCase):
 class NotificationQueryBaseTest(TestCase):
     def setUp(self):
         super(NotificationQueryBaseTest, self).setUp()
-        self.team_content_type = G(ContentType)
-        self.user_content_type = G(ContentType)
+        user_wes = G(User, name='wes')
+        user_jared = G(User, name='jared')
+        user_josh = G(User, name='josh')
+        user_jeff = G(User, name='jeff')
+        team_red = G(Team, name='team red')
+        team_blue = G(Team, name='team blue')
+
+        self.team_content_type = ContentType.objects.get_for_model(Team)
+        self.user_content_type = ContentType.objects.get_for_model(User)
 
         self.news_feed_medium = G(Medium, name='news_feed', display_name='News Feed')
         self.email_medium = G(Medium, name='email', display_name='Email')
@@ -539,13 +547,13 @@ class NotificationQueryBaseTest(TestCase):
         self.punched_action = G(Action, name='action2', display_name='punched')
         self.high_fived_action = G(Action, name='action3', display_name='high fived')
 
-        self.team_red = G(Entity, entity_type=self.team_content_type)
-        self.team_blue = G(Entity, entity_type=self.team_content_type)
+        self.team_red = G(Entity, entity_type=self.team_content_type, entity_id=team_red.id)
+        self.team_blue = G(Entity, entity_type=self.team_content_type, entity_id=team_blue.id)
 
-        self.user_wes = G(Entity, entity_type=self.user_content_type)
-        self.user_jared = G(Entity, entity_type=self.user_content_type)
-        self.user_josh = G(Entity, entity_type=self.user_content_type)
-        self.user_jeff = G(Entity, entity_type=self.user_content_type)
+        self.user_wes = G(Entity, entity_type=self.user_content_type, entity_id=user_wes.id)
+        self.user_jared = G(Entity, entity_type=self.user_content_type, entity_id=user_jared.id)
+        self.user_josh = G(Entity, entity_type=self.user_content_type, entity_id=user_josh.id)
+        self.user_jeff = G(Entity, entity_type=self.user_content_type, entity_id=user_jeff.id)
 
         G(EntityRelationship, sub_entity=self.user_wes, super_entity=self.team_red)
         G(EntityRelationship, sub_entity=self.user_jared, super_entity=self.team_red)
@@ -1340,3 +1348,72 @@ class NotificationUnsubscribeTest(NotificationQueryBaseTest):
         self.assertEqual(self.jared_punched_josh, items[1])
         self.assertEqual(self.jared_punched_jared, items[2])
         self.assertEqual(self.josh_high_fived_wes, items[3])
+
+
+class ActionTest(NotificationQueryBaseTest):
+    def setUp(self):
+        super(ActionTest, self).setUp()
+        self.post_action = G(
+            Action,
+            name='action_1',
+            display_name='posted',
+            description='Posted an item',
+            render_class_path='entity_subscription.tests.actions.PostAction',
+        )
+
+    def test_default_rendering_actor_action(self):
+        notification = Notification.objects.create_notification(self.post_action, self.user_jared)
+        self.assertEqual('jared posted', notification.render(html=False))
+
+    def test_default_rendering_action_object(self):
+        message = G(Message, text='whatever')
+        message = G(Entity, entity_type=ContentType.objects.get_for_model(message), entity_id=message.id)
+        notification = Notification.objects.create_notification(
+            self.post_action, self.user_jared, action_object=message)
+        self.assertEqual('jared posted a message', notification.render(html=False))
+
+    def test_default_rendering_target(self):
+        message = G(Message, text='whatever')
+        message = G(Entity, entity_type=ContentType.objects.get_for_model(message), entity_id=message.id)
+        board = G(Board, name='A Board')
+        board = G(Entity, entity_type=ContentType.objects.get_for_model(board), entity_id=board.id)
+        notification = Notification.objects.create_notification(
+            self.post_action, self.user_jared, action_object=message, target=board)
+        self.assertEqual('jared posted a message to A Board', notification.render(html=False))
+
+    def test_html_rendering_actor_action(self):
+        context = {
+            'actor_url': 'actor url',
+        }
+        notification = Notification.objects.create_notification(self.post_action, self.user_jared, context=context)
+        self.assertEqual('<a href="actor url">jared</a> posted', notification.render())
+
+    def test_html_rendering_action_object(self):
+        context = {
+            'actor_url': 'actor url',
+            'action_object_url': 'action object url',
+        }
+        message = G(Message, text='whatever')
+        message = G(Entity, entity_type=ContentType.objects.get_for_model(message), entity_id=message.id)
+        notification = Notification.objects.create_notification(
+            self.post_action, self.user_jared, action_object=message, context=context)
+        self.assertEqual(
+            '<a href="actor url">jared</a> posted <a href="action object url">a message</a>', notification.render())
+
+    def test_html_rendering_target(self):
+        context = {
+            'actor_url': 'actor url',
+            'action_object_url': 'action object url',
+            'target_url': 'target url',
+        }
+        message = G(Message, text='whatever')
+        message = G(Entity, entity_type=ContentType.objects.get_for_model(message), entity_id=message.id)
+        board = G(Board, name='A Board')
+        board = G(Entity, entity_type=ContentType.objects.get_for_model(board), entity_id=board.id)
+        notification = Notification.objects.create_notification(
+            self.post_action, self.user_jared, action_object=message, target=board, context=context)
+        self.assertEqual(
+            ('<a href="actor url">jared</a> posted <a href="action object url">a message</a> to '
+             '<a href="target url">A Board</a>'),
+            notification.render()
+        )

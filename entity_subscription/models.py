@@ -1,6 +1,7 @@
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models import Q
+from django.utils.module_loading import import_by_path
 from entity import Entity, EntityRelationship
 import jsonfield
 from datetime import timedelta
@@ -519,8 +520,13 @@ class Notification(models.Model):
     class Meta:
         unique_together = ('actor', 'event_id',)
 
+    def render(self, html=True):
+        action_class = import_by_path(self.action.render_class_path)(self)
+        return action_class.render(html=html)
+
 
 class NotificationMedium(models.Model):
     notification = models.ForeignKey('Notification')
     medium = models.ForeignKey(Medium)
+    entity = models.ForeignKey(Entity)
     time_seen = models.DateTimeField(null=True, default=None)

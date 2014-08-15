@@ -396,15 +396,12 @@ class NotificationManager(models.Manager):
                     entity_type=subscription.followed_subentity_type,
                     super_relationships__super_entity=subscription.followed_entity)
                 if subscription.action:
-                    print 'okkk'
                     filters['entity_action'].add(
                         Q(actor_id__in=entities_queryset) &
                         Q(action=subscription.action),
                         Q.OR
                     )
-                    print filters['entity_action']
                 else:
-                    print 'here it is'
                     filters['only_entity'].add(
                         Q(actor_id__in=entities_queryset),
                         Q.OR

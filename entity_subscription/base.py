@@ -17,11 +17,11 @@ class BaseAction(object):
 
     def get_actor_display(self, actor, html=True):
         if html:
-            return '<a href="{0}">{1}</a>'.format(self.get_actor_url(), actor.entity)
-        return actor.entity
+            return '<a href="{0}">{1}</a>'.format(self.get_actor_url(), self.get_actor_name(actor))
+        return self.get_actor_name(actor)
 
     def get_action_display(self, action, html=True):
-        return action.display_name
+        return action.description
 
     def get_action_object_display(self, action_object, html=True):
         if not action_object:
@@ -37,13 +37,18 @@ class BaseAction(object):
             return 'to <a href="{0}">{1}</a>'.format(self.get_target_url(), target.entity)
         return 'to {0}'.format(target.entity)
 
+    def get_actor_name(self, actor):
+        if hasattr(actor, 'entity'):
+            return actor.entity
+        return actor
+
     def get_actor_url(self):
         if self.notification.context:
             if self.notification.context.get('actor_url'):
                 return self.notification.context.get('actor_url')
             if self.notification.context.get('actor_url_name'):
                 return reverse(self.notification.context.get('actor_url_name'), kwargs={
-                    'pk': self.notification.context.get('actor_id'),
+                    self.notification.context.get('actor_id_field', 'pk'): self.notification.context.get('actor_id'),
                 })
         return None
 

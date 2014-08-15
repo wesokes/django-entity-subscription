@@ -1,4 +1,5 @@
 import datetime
+from django.contrib.contenttypes import generic
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -367,8 +368,12 @@ class NotificationManager(models.Manager):
         return NotificationQuerySet(self.model)
 
     def get_subscribe_queryset(self, entity, medium):
-        entities_queryset = Entity.objects.filter(sub_relationships__sub_entity=entity)
-        subscribe_filter = Q(medium=medium) & Q(Q(entity=entity) | Q(entity__in=entities_queryset))
+        subscribe_filter = Q(medium=medium) & Q(entity=entity)
+
+        if entity.__class__ is Entity:
+            entities_queryset = Entity.objects.filter(sub_relationships__sub_entity=entity)
+            subscribe_filter = Q(medium=medium) & Q(Q(entity=entity) | Q(entity__in=entities_queryset))
+
         subscribe_queryset = Subscription.objects.filter(subscribe_filter)
         return subscribe_queryset
 
@@ -391,15 +396,33 @@ class NotificationManager(models.Manager):
                     entity_type=subscription.followed_subentity_type,
                     super_relationships__super_entity=subscription.followed_entity)
                 if subscription.action:
-                    filters['entity_action'].add(Q(actor__in=entities_queryset) & Q(action=subscription.action), Q.OR)
-                else:
-                    filters['only_entity'].add(Q(actor__in=entities_queryset), Q.OR)
-            else:
-                if subscription.followed_entity and subscription.action:
+                    print 'okkk'
                     filters['entity_action'].add(
-                        Q(actor=subscription.followed_entity) & Q(action=subscription.action), Q.OR)
-                elif subscription.followed_entity:
-                    filters['only_entity'].add(Q(actor=subscription.followed_entity), Q.OR)
+                        Q(actor_id__in=entities_queryset) &
+                        Q(action=subscription.action),
+                        Q.OR
+                    )
+                    print filters['entity_action']
+                else:
+                    print 'here it is'
+                    filters['only_entity'].add(
+                        Q(actor_id__in=entities_queryset),
+                        Q.OR
+                    )
+            else:
+                if subscription.followed_entity:
+                    followed_entity_type = ContentType.objects.get_for_model(subscription.followed_entity)
+                    if subscription.action:
+                        filters['entity_action'].add(
+                            Q(actor_id=subscription.followed_entity.id) &
+                            Q(action=subscription.action),
+                            Q.OR
+                        )
+                    else:
+                        filters['only_entity'].add(
+                            Q(actor_id=subscription.followed_entity.id),
+                            Q.OR
+                        )
                 else:
                     filters['only_action'].add(Q(action=subscription.action), Q.OR)
 
@@ -413,10 +436,19 @@ class NotificationManager(models.Manager):
         }
 
         for unsubscribe in unsubscribe_queryset:
-            if unsubscribe.followed_entity and unsubscribe.action:
-                excludes['entity_action'].add(Q(actor=unsubscribe.followed_entity) & Q(action=unsubscribe.action), Q.OR)
-            elif unsubscribe.followed_entity:
-                excludes['only_entity'].add(Q(actor=unsubscribe.followed_entity), Q.OR)
+            if unsubscribe.followed_entity:
+                followed_entity_type = ContentType.objects.get_for_model(unsubscribe.followed_entity)
+                if unsubscribe.action:
+                    excludes['entity_action'].add(
+                        Q(actor_id=unsubscribe.followed_entity.id) &
+                        Q(action=unsubscribe.action),
+                        Q.OR
+                    )
+                else:
+                    excludes['only_entity'].add(
+                        Q(actor_id=unsubscribe.followed_entity.id),
+                        Q.OR
+                    )
             else:
                 excludes['only_action'].add(Q(action=unsubscribe.action), Q.OR)
 
@@ -449,7 +481,7 @@ class NotificationManager(models.Manager):
         return self.get_queryset().mark_seen(*args, **kwargs)
 
     def create_notification(
-            self, action, actor, action_object=None, target=None, context=None, expires=None, event_id=None):
+            self, actor, action, action_object=None, target=None, context=None, expires=None, event_id=None):
         """Create notifications, if the appropriate subscription exits.
 
         This method also creates the appropriate NotificationMedium
@@ -505,11 +537,34 @@ class NotificationManager(models.Manager):
                 action=action.name,
                 timestamp=current_time.strftime('%Y.%d.%m.%H.%M.%S.%f')
             )
+
+        # Get actor info
+        actor_type = ContentType.objects.get_for_model(actor)
+        actor_id = actor.id
+
+        # Get action object info
+        action_object_type = None
+        action_object_id = None
+        if action_object:
+            action_object_type = ContentType.objects.get_for_model(action_object)
+            action_object_id = action_object.id
+
+        # Get target info
+        target_type = None
+        target_id = None
+        if target:
+            target_type = ContentType.objects.get_for_model(target)
+            target_id = target.id
+
+        # Create the notification
         notification = self.create(
-            actor=actor,
+            actor_type=actor_type,
+            actor_id=actor_id,
             action=action,
-            action_object=action_object,
-            target=target,
+            action_object_type=action_object_type,
+            action_object_id=action_object_id,
+            target_type=target_type,
+            target_id=target_id,
             context=context,
             time_expires=expires,
             event_id=event_id,
@@ -524,20 +579,29 @@ class NotificationManager(models.Manager):
 
 
 class Notification(models.Model):
-    actor = models.ForeignKey(Entity)
+    actor_type = models.ForeignKey(ContentType, related_name='+')
+    actor_id = models.PositiveIntegerField()
+    actor = generic.GenericForeignKey('actor_type', 'actor_id')
+
     action = models.ForeignKey(Action)
-    action_object = models.ForeignKey(Entity, null=True, default=None, related_name='+')
-    target = models.ForeignKey(Entity, null=True, default=None, related_name='+')
+
+    action_object_type = models.ForeignKey(ContentType, related_name='+', null=True)
+    action_object_id = models.PositiveIntegerField(null=True)
+    action_object = generic.GenericForeignKey('action_object_type', 'action_object_id')
+
+    target_type = models.ForeignKey(ContentType, related_name='+', null=True)
+    target_id = models.PositiveIntegerField(null=True)
+    target = generic.GenericForeignKey('target_type', 'target_id')
+
     context = jsonfield.JSONField()
+
     time_created = models.DateTimeField(auto_now_add=True)
     time_expires = models.DateTimeField(null=True, default=None)
+
     # used to identify a type of notification to prevent duplicates and to group similar notifications
     event_id = models.CharField(max_length=128)
 
     objects = NotificationManager()
-
-    class Meta:
-        unique_together = ('actor', 'event_id',)
 
     def render(self, html=True):
         action_class = import_by_path(self.action.get_render_class_path())(self)

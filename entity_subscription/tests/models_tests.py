@@ -493,36 +493,36 @@ class NotificationManagerCreateNotificationTest(TestCase):
 
     def test_creates_notification(self):
         Notification.objects.create_notification(
-            action=self.action,
             actor=self.actor,
+            action=self.action,
             context={},
         )
         self.assertEqual(Notification.objects.count(), 1)
 
     def test_creates_unique_event_ids(self):
         notification_1 = Notification.objects.create_notification(
-            action=self.action,
             actor=self.actor,
+            action=self.action,
             context={},
         )
         notification_2 = Notification.objects.create_notification(
-            action=self.action,
             actor=self.actor,
+            action=self.action,
             context={},
         )
         self.assertNotEqual(notification_1.event_id, notification_2.event_id)
 
     def test_raises_bad_data_error(self):
         Notification.objects.create_notification(
-            action=self.action,
             actor=self.actor,
+            action=self.action,
             context={},
             event_id='Not Going To Be Unique',
         )
         with self.assertRaises(IntegrityError):
             Notification.objects.create_notification(
-                action=self.action,
                 actor=self.actor,
+                action=self.action,
                 context={},
                 event_id='Not Going To Be Unique',
             )
@@ -567,16 +567,16 @@ class NotificationQueryBaseTest(TestCase):
         G(EntityRelationship, sub_entity=self.user_jeff, super_entity=self.team_blue)
 
         self.jared_woke_up = Notification.objects.create_notification(
-            self.woke_up_action,
             self.user_jared,
+            self.woke_up_action,
             context={
                 'actor_url_name': 'user_page',
                 'actor_id': user_jared.id,
             },
         )
         self.jared_punched_josh = Notification.objects.create_notification(
-            self.punched_action,
             self.user_jared,
+            self.punched_action,
             action_object=self.user_josh,
             context={
                 'actor_url_name': 'user_page',
@@ -586,8 +586,8 @@ class NotificationQueryBaseTest(TestCase):
             },
         )
         self.jared_punched_jared = Notification.objects.create_notification(
-            self.punched_action,
             self.user_jared,
+            self.punched_action,
             action_object=self.user_jared,
             context={
                 'actor_url_name': 'user_page',
@@ -597,8 +597,8 @@ class NotificationQueryBaseTest(TestCase):
             },
         )
         self.jared_high_fived_jeff = Notification.objects.create_notification(
-            self.high_fived_action,
             self.user_jared,
+            self.high_fived_action,
             action_object=self.user_jeff,
             context={
                 'actor_url_name': 'user_page',
@@ -608,8 +608,8 @@ class NotificationQueryBaseTest(TestCase):
             },
         )
         self.josh_high_fived_wes = Notification.objects.create_notification(
-            self.high_fived_action,
             self.user_josh,
+            self.high_fived_action,
             action_object=self.user_wes,
             context={
                 'actor_url_name': 'user_page',
@@ -619,8 +619,8 @@ class NotificationQueryBaseTest(TestCase):
             },
         )
         self.wes_high_fived_jared = Notification.objects.create_notification(
-            self.high_fived_action,
             self.user_wes,
+            self.high_fived_action,
             action_object=self.user_jared,
             context={
                 'actor_url_name': 'user_page',
@@ -630,8 +630,8 @@ class NotificationQueryBaseTest(TestCase):
             },
         )
         self.jeff_woke_up = Notification.objects.create_notification(
-            self.woke_up_action,
             self.user_jeff,
+            self.woke_up_action,
             context={
                 'actor_url_name': 'user_page',
                 'actor_id': user_jeff.id,
@@ -697,6 +697,18 @@ class NotificationIndividualQueryTest(NotificationQueryBaseTest):
             medium=self.news_feed_medium, action=None,
         )
 
+
+        for notification in Notification.objects.order_by('id'):
+            print ''
+            print notification.__dict__
+
+        print ''
+        print Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium).query
+
+        print 'user type', self.user_content_type.id
+        print 'team red id', self.team_red.id
+        print 'wes', self.user_wes.id
+        print 'jared', self.user_jared.id
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(5, queryset.count())
 
@@ -1427,14 +1439,14 @@ class ActionTest(NotificationQueryBaseTest):
         )
 
     def test_default_rendering_actor_action(self):
-        notification = Notification.objects.create_notification(self.post_action, self.user_jared)
+        notification = Notification.objects.create_notification(self.user_jared, self.post_action)
         self.assertEqual('jared posted', notification.render(html=False))
 
     def test_default_rendering_action_object(self):
         message = G(Message, text='whatever')
         message = G(Entity, entity_type=ContentType.objects.get_for_model(message), entity_id=message.id)
         notification = Notification.objects.create_notification(
-            self.post_action, self.user_jared, action_object=message)
+            self.user_jared, self.post_action, action_object=message)
         self.assertEqual('jared posted a message', notification.render(html=False))
 
     def test_default_rendering_target(self):
@@ -1443,14 +1455,14 @@ class ActionTest(NotificationQueryBaseTest):
         board = G(Board, name='A Board')
         board = G(Entity, entity_type=ContentType.objects.get_for_model(board), entity_id=board.id)
         notification = Notification.objects.create_notification(
-            self.post_action, self.user_jared, action_object=message, target=board)
+            self.user_jared, self.post_action, action_object=message, target=board)
         self.assertEqual('jared posted a message to A Board', notification.render(html=False))
 
     def test_html_rendering_actor_action(self):
         context = {
             'actor_url': 'actor url',
         }
-        notification = Notification.objects.create_notification(self.post_action, self.user_jared, context=context)
+        notification = Notification.objects.create_notification(self.user_jared, self.post_action, context=context)
         self.assertEqual('<a href="actor url">jared</a> posted', notification.render())
 
     def test_html_rendering_action_object(self):
@@ -1461,7 +1473,7 @@ class ActionTest(NotificationQueryBaseTest):
         message = G(Message, text='whatever')
         message = G(Entity, entity_type=ContentType.objects.get_for_model(message), entity_id=message.id)
         notification = Notification.objects.create_notification(
-            self.post_action, self.user_jared, action_object=message, context=context)
+            self.user_jared, self.post_action, action_object=message, context=context)
         self.assertEqual(
             '<a href="actor url">jared</a> posted <a href="action object url">a message</a>', notification.render())
 
@@ -1476,7 +1488,7 @@ class ActionTest(NotificationQueryBaseTest):
         board = G(Board, name='A Board')
         board = G(Entity, entity_type=ContentType.objects.get_for_model(board), entity_id=board.id)
         notification = Notification.objects.create_notification(
-            self.post_action, self.user_jared, action_object=message, target=board, context=context)
+            self.user_jared, self.post_action, action_object=message, target=board, context=context)
         self.assertEqual(
             ('<a href="actor url">jared</a> posted <a href="action object url">a message</a> to '
              '<a href="target url">A Board</a>'),

@@ -12,11 +12,11 @@ class ActionAdmin(admin.ModelAdmin):
 
 
 class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('entity', 'source', 'medium')
+    list_display = ('entity', 'action', 'medium')
 
 
 class UnsubscribeAdmin(admin.ModelAdmin):
-    list_display = ('entity', 'source', 'medium')
+    list_display = ('entity', 'action', 'medium')
 
 
 admin.site.register(Medium, MediumAdmin)

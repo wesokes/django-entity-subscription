@@ -52,6 +52,11 @@ class BaseAction(object):
                 })
         return None
 
+    def get_action_object_name(self, action_object):
+        if hasattr(action_object, 'entity'):
+            return action_object.entity
+        return action_object
+
     def get_action_object_url(self):
         if self.notification.context:
             if self.notification.context.get('action_object_url'):
@@ -61,6 +66,11 @@ class BaseAction(object):
                     'pk': self.notification.context.get('action_object_id'),
                 })
         return None
+
+    def get_target_name(self, target):
+        if hasattr(target, 'entity'):
+            return target.entity
+        return target
 
     def get_target_url(self):
         if self.notification.context:

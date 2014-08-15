@@ -697,18 +697,6 @@ class NotificationIndividualQueryTest(NotificationQueryBaseTest):
             medium=self.news_feed_medium, action=None,
         )
 
-
-        for notification in Notification.objects.order_by('id'):
-            print ''
-            print notification.__dict__
-
-        print ''
-        print Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium).query
-
-        print 'user type', self.user_content_type.id
-        print 'team red id', self.team_red.id
-        print 'wes', self.user_wes.id
-        print 'jared', self.user_jared.id
         queryset = Notification.objects.get_for_entity(self.user_wes, self.news_feed_medium)
         self.assertEqual(5, queryset.count())
 
